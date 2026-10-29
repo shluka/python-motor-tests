@@ -25,6 +25,8 @@ class App:
         self.ready = self.sensor_ready = False
         self.jog = JogController()
         self.travel = TravelCalibration()
+        self.returning = False
+        self.return_supported = demo
         self.jog_supported = demo
         self.saved = True
         self.data = self.protocol = None
@@ -101,7 +103,7 @@ class App:
             self.jog_buttons.append(button)
         self.root.bind('<ButtonRelease-1>', lambda event: self.jog_release(), add='+')
         self.root.bind('<FocusOut>', lambda event: self.root.after_idle(self.check_jog_focus), add='+')
-        self.root.bind('<Unmap>', lambda event: self.jog_release() if event.widget == self.root else None, add='+')
+        self.root.bind('<Unmap>', lambda event: self.stop() if event.widget == self.root and self.jog.active else None, add='+')
         self.jog_hint = ttk.Label(left, text='Necesita firmware con soporte JOG.', wraplength=440)
         self.jog_hint.pack()
         travel_panel = ttk.LabelFrame(left, text='Calibracion de recorrido por pulsos', padding=6)
@@ -113,17 +115,22 @@ class App:
             button = ttk.Button(travel_panel, text=label, command=lambda a=action: self.calibrate_travel(a))
             button.pack(fill='x', pady=2)
             self.travel_buttons.append(button)
+        self.return_button = ttk.Button(travel_panel, text='Volver al minimo', command=self.return_to_minimum)
+        self.return_button.pack(fill='x', pady=2)
         ttk.Label(travel_panel, text='Fija cero -> avanza -> fija maximo -> vuelve a 0 mm. '
                   'Maximo de ensayo; no es un final de carrera. El movimiento manual sigue bajo tu control.',
                   wraplength=440).pack(anchor='w')
         self.update_travel()
-        ttk.Label(left, text='Cyclic protocol (maximum 10 blocks)', font=('', 12, 'bold')).pack(pady=6)
+        ttk.Label(left, text='Secuencia de bloques (maximo 10)', font=('', 12, 'bold')).pack(pady=6)
         names = ('Cycles', 'mm', 'F mm/s', 'Max s', 'B mm/s', 'Zero s', 'After s')
         self.table = ttk.Treeview(left, columns=names, show='headings', height=5, selectmode='browse')
         for name in names:
             self.table.heading(name, text=name)
             self.table.column(name, width=62, stretch=False)
         self.table.pack(fill='x')
+        ttk.Label(left, text='Cada fila se ejecuta despues de la anterior, sin reiniciar el ensayo.\n'
+                  'Ejemplo: bloque 1 = 5 ciclos de 5 mm; bloque 2 = 5 ciclos de 10 mm.',
+                  wraplength=440).pack(anchor='w', pady=4)
         self.summary = tk.StringVar()
         ttk.Label(left, textvariable=self.summary, wraplength=440).pack(pady=4)
         ttk.Label(left, text='Motor 17HS4401 · driver A4988 · recorrido definido por el usuario. '
@@ -132,7 +139,7 @@ class App:
         self.table.bind('<Double-1>', lambda _: self.edit_block())
         buttons = ttk.Frame(left)
         buttons.pack(fill='x', pady=4)
-        for text, command in [('Add', self.add_block), ('Edit', self.edit_block), ('Remove', self.remove_block)]:
+        for text, command in [('Anadir bloque', self.add_block), ('Editar bloque', self.edit_block), ('Eliminar bloque', self.remove_block)]:
             button = ttk.Button(buttons, text=text, command=command)
             button.pack(side='left', expand=True, fill='x')
             self.editable.append(button)
@@ -179,13 +186,16 @@ class App:
         self.table.delete(*self.table.get_children())
         for i, block in enumerate(self.blocks):
             self.table.insert('', 'end', iid=str(i), values=[format(v, '.6g') for v in block.values()])
-        self.summary.set(f'{sum(int(b.cycles) for b in self.blocks)} ciclos · '
+        self.summary.set(f'{len(self.blocks)} bloques en secuencia | {sum(int(b.cycles) for b in self.blocks)} ciclos · '
                          f'duración nominal {sum(b.duration() for b in self.blocks):.1f} s')
 
     def add_block(self):
         if not self.active and not self.jog.active and len(self.blocks) < 10:
             self.blocks.append(Block())
             self.update_table()
+            self.table.selection_set(str(len(self.blocks) - 1))
+            self.table.see(str(len(self.blocks) - 1))
+            self.edit_block()
 
     def edit_block(self):
         if self.active or self.jog.active or not self.table.selection():
@@ -241,11 +251,13 @@ class App:
         for widget in self.editable:
             widget.configure(state='disabled' if locked else 'normal')
         self.start_button.configure(state='normal' if self.ready and self.sensor_ready and not locked else 'disabled')
-        self.stop_button.configure(state='normal' if self.active else 'disabled')
+        self.stop_button.configure(state='normal' if self.active or self.jog.active else 'disabled')
+        self.return_button.configure(state='normal' if self.ready and self.return_supported and
+                                     not locked and self.travel.maximum is not None else 'disabled')
         for button in self.travel_buttons:
             button.configure(state='normal' if self.ready and not locked else 'disabled')
         for button in self.jog_buttons:
-            button.configure(state='normal' if self.ready and self.jog_supported and
+            button.configure(state='normal' if not self.returning and self.ready and self.jog_supported and
                              not self.active and not self.connecting and self.jog.state not in
                              ('stopping', 'waiting_ready') else 'disabled')
         self.jog_hint.configure(text='Soltar, salir del botón o cambiar de ventana detiene el motor.'
@@ -271,8 +283,36 @@ class App:
                 self.travel = TravelCalibration()
                 self.zero.set(False)
             self.update_travel()
+            self.controls()
         except ValueError as exc:
             messagebox.showerror('Calibracion', str(exc), parent=self.root)
+
+    def return_to_minimum(self):
+        if self.active or self.connecting or self.jog.active or not self.ready or not self.return_supported:
+            return
+        try:
+            command = self.travel.return_command(float(self.jog_speed.get().replace(',', '.')))
+            if command is None:
+                self.status.set('El motor ya esta en el minimo.')
+                return
+            now = time.monotonic()
+            speed = float(self.jog_speed.get().replace(',', '.'))
+            direction = 1 if self.travel.steps < self.travel.origin else -1
+            self.jog.start(direction, speed, now)
+            self.returning = True
+            self.return_deadline = now + abs(self.travel.position) / speed * 2 + 5
+            self.zero.set(False)
+            if self.demo:
+                self.demo_jog_time = now
+                self.demo_jog_steps = self.travel.steps
+                self.demo_jog_direction, self.demo_jog_speed = direction, speed
+            self.send(command)
+            self.controls()
+            self.status.set('Volviendo al minimo. STOP motor cancela el retorno.')
+        except ValueError as exc:
+            messagebox.showerror('Volver al minimo', str(exc), parent=self.root)
+        except (OSError, serial.SerialException) as exc:
+            self.jog_error(str(exc))
 
     def jog_press(self, direction):
         if self.active or self.connecting or not self.ready or not self.jog_supported:
@@ -294,6 +334,8 @@ class App:
         return 'break'
 
     def jog_release(self):
+        if self.returning:
+            return
         command = self.jog.stop(time.monotonic())
         if command:
             try:
@@ -305,9 +347,10 @@ class App:
 
     def check_jog_focus(self):
         if self.jog.active and self.root.focus_displayof() is None:
-            self.jog_release()
+            self.stop()
 
     def jog_error(self, reason):
+        self.returning = False
         if not self.demo and self.motor:
             try:
                 self.motor.write(b'STOP\n')
@@ -322,6 +365,7 @@ class App:
         self.disconnect()
         self.esp_buffer, self.motor_buffer = LineBuffer(), LineBuffer()
         self.ready = self.sensor_ready = False
+        self.return_supported = self.demo
         self.jog_supported = self.demo
         if self.demo:
             self.ready = self.sensor_ready = True
@@ -344,6 +388,7 @@ class App:
             self.connection_error(str(exc))
 
     def disconnect(self):
+        self.returning = False
         self.travel = TravelCalibration()
         self.zero.set(False)
         self.update_travel()
@@ -356,7 +401,7 @@ class App:
         if not command:
             return
         if self.demo:
-            if command.startswith('JOG,'):
+            if command.startswith(('JOG,', 'JOG_TO,')):
                 self.jog.message('OK,JOG', time.monotonic())
             elif command == 'STOP' and self.jog.active:
                 self.on_motor('STOPPED', time.monotonic())
@@ -470,7 +515,12 @@ class App:
                 raise ValueError('Telemetria de posicion invalida.')
             self.travel.steps = int(fields[2])
             self.update_travel()
+        if line == 'CAPS,RETURN,1':
+            self.return_supported = True
+            return
         if line == 'CAPS,JOG,1':
+            if self.active or self.jog.active:
+                raise ValueError('Mega reiniciado durante el movimiento; referencia perdida.')
             self.travel = TravelCalibration()
             self.zero.set(False)
             self.update_travel()
@@ -479,6 +529,7 @@ class App:
         if self.jog.active:
             self.jog.message(line, now)
             if not self.jog.active:
+                self.returning = False
                 self.controls()
                 self.status.set('Motor detenido. Establece el cero antes del ensayo.')
             return
@@ -521,8 +572,14 @@ class App:
                 dt = max(0, now - self.demo_jog_time)
                 self.demo_jog_time = now
                 self.demo_jog_steps += self.demo_jog_direction * self.demo_jog_speed * 1600 * dt
+                if self.returning and (self.demo_jog_steps - self.travel.origin) * self.demo_jog_direction >= 0:
+                    self.demo_jog_steps = self.travel.origin
+                    self.on_motor('STOPPED', now)
+                    self.on_motor('READY', now)
                 self.travel.steps = round(self.demo_jog_steps)
                 self.update_travel()
+            if self.returning and now > self.return_deadline:
+                raise ValueError('Tiempo de retorno excedido; reconecta y calibra de nuevo.')
             if self.jog.active:
                 self.send(self.jog.tick(now))
             if self.motor:
@@ -610,6 +667,10 @@ class App:
         self.canvas.draw_idle()
 
     def stop(self):
+        if self.jog.active:
+            self.returning = False
+            self.jog_release()
+            return
         if not self.active or self.protocol.stage == 'stopping':
             return
         self.stop_deadline = time.monotonic()+4
@@ -700,7 +761,7 @@ class App:
 
     def close(self):
         if self.jog.active:
-            self.jog_release()
+            self.stop()
             self.status.set('Deteniendo movimiento manual. Cierra de nuevo tras la confirmación.')
             return
         if self.active:

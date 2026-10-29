@@ -1,3 +1,4 @@
+#include <errno.h>
 // ============================================================
 // MOTOR TEST BENCH - CYCLIC PROTOCOL WITH EXECUTED-PULSE TELEMETRY
 // Same commands, pins, mechanics and 9600 baud as the original sketch.
@@ -113,7 +114,7 @@ bool stopRequested = false;
 long netSteps = 0;
 unsigned long lastPositionReportUs = 0;
 void reportPosition(bool force);
-void runJog(int direction, float speed);
+void runJog(int direction, float speed, bool bounded = false, long target = 0);
 
 void reportPosition(bool force)
 {
@@ -148,6 +149,7 @@ void setup()
   delay(2000);
 
   Serial.println("CAPS,JOG,1");
+  Serial.println("CAPS,RETURN,1");
   Serial.println("READY");
 }
 
@@ -181,6 +183,28 @@ void loop()
 
 void processCommand(const String &command)
 {
+  if (command.startsWith("JOG_TO,"))
+  {
+    const int separator = command.indexOf(',', 7);
+    const String targetText = command.substring(7, separator);
+    const String speedText = command.substring(separator + 1);
+    char *targetEnd = NULL;
+    char *speedEnd = NULL;
+    errno = 0;
+    const long target = strtol(targetText.c_str(), &targetEnd, 10);
+    const bool invalidTarget = errno == ERANGE || targetEnd == targetText.c_str() || *targetEnd != '\0';
+    const float speed = strtod(speedText.c_str(), &speedEnd);
+    if (separator < 0 || protocolRunning || invalidTarget ||
+        speedEnd == speedText.c_str() || *speedEnd != '\0' || !isfinite(speed) || speed < 0.05f || speed > 1.0f)
+    {
+      Serial.println("ERROR,INVALID_RETURN");
+      Serial.println("READY");
+      return;
+    }
+    runJog(target > netSteps ? HIGH : LOW, speed, true, target);
+    Serial.println("READY");
+    return;
+  }
   // Manual motion is separate from the stored cyclic protocol.
   if (command.startsWith("JOG,"))
   {
@@ -802,7 +826,7 @@ unsigned long calculatePulseDelay(
 // MOTOR MOVEMENT
 // ============================================================
 
-void runJog(int direction, float speed)
+void runJog(int direction, float speed, bool bounded, long target)
 {
   const unsigned long pulseDelay = calculatePulseDelay(speed);
   unsigned long lastKeepAlive = millis();
@@ -816,6 +840,7 @@ void runJog(int direction, float speed)
 
   while (running)
   {
+    if (bounded && netSteps == target) break;
     // Parse without readStringUntil: a partial line must not block STOP/watchdog.
     while (Serial.available() > 0)
     {

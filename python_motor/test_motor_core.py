@@ -55,6 +55,26 @@ class MotorTests(unittest.TestCase):
         self.assertEqual(p.stage, 'baseline')
         return p
 
+    def test_consecutive_blocks_with_different_distances(self):
+        p = self.uploaded([Block(cycles=5, distance=5), Block(cycles=5, distance=10)])
+        self.assertEqual(p.baseline_ready(), 'RUN')
+        p.message('START_PROTOCOL,2', 0)
+        now = 1
+        for block_index, distance in ((1, 5), (2, 10)):
+            p.message(f'START_BLOCK,{block_index}', now)
+            for cycle in range(1, 6):
+                p.message(f'START_FORWARD,{block_index},{cycle}', now)
+                now += distance / .2
+                p.message(f'END_FORWARD,{block_index},{cycle}', now)
+                self.assertEqual(p.position(now), distance)
+                p.message(f'START_BACKWARD,{block_index},{cycle}', now)
+                now += distance / .2
+                p.message(f'END_BACKWARD,{block_index},{cycle}', now)
+                self.assertEqual(p.position(now), 0)
+            p.message(f'END_BLOCK,{block_index}', now)
+        p.message('FIN', now)
+        self.assertEqual(p.stage, 'finished')
+
     def test_upload_and_baseline_gate(self):
         p = self.uploaded([Block(), Block()])
         self.assertEqual(p.baseline_ready(), 'RUN')

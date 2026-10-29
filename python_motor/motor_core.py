@@ -311,3 +311,15 @@ class TravelCalibration:
             raise ValueError('Vuelve al cero con los botones antes de iniciar el ensayo (tolerancia: un pulso).')
         if any(b.distance > self.maximum for b in blocks):
             raise ValueError(f'El ensayo supera el recorrido maximo calibrado: {self.maximum:.4f} mm.')
+
+
+    def return_command(self, speed):
+        if self.maximum is None or self.position is None:
+            raise ValueError('Fija primero el minimo (cero) y el maximo.')
+        if not math.isfinite(speed) or not BENCH_LIMITS.min_speed <= speed <= BENCH_LIMITS.max_speed:
+            raise ValueError('Velocidad manual permitida: 0,05-1 mm/s.')
+        if not 0 <= self.position <= self.maximum:
+            raise ValueError('Posicion fuera del recorrido calibrado; revisa la referencia.')
+        if self.steps == self.origin:
+            return None
+        return f'JOG_TO,{self.origin},{speed:.6f}'

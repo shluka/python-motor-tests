@@ -278,3 +278,28 @@ el posicionamiento y la calibraci?n.
 Este m?ximo valida los ensayos; **no detiene el movimiento manual en el l?mite**
 y no sustituye un final de carrera. El operador debe soltar el bot?n antes del
 extremo mec?nico. Requiere el firmware Mega_Cyclic_Telemetry con soporte JOG.
+
+
+## Volver al minimo y secuencias de bloques
+
+Tras fijar cero y maximo, **Volver al minimo** lleva el motor al cero guardado
+usando la velocidad manual seleccionada. El Mega detiene los pulsos exactamente
+en el contador objetivo; STOP motor cancela el retorno. La perdida de foco o
+minimizar la ventana tambien solicita parada. No hay movimiento al conectar.
+Requiere cargar la version actual de Mega_Cyclic_Telemetry, que anuncia
+`CAPS,RETURN,1`; con firmware anterior el boton permanece deshabilitado.
+
+El comando es `JOG_TO,target_steps,speed_mm_s`, con objetivo absoluto del contador
+de pulsos actual. Conserva el heartbeat JOG_KEEP y el watchdog de 400 ms.
+La posicion sigue siendo calculada por pulsos, sin encoder ni homing fisico.
+
+Para 5 ciclos de 5 mm seguidos de 5 ciclos de 10 mm:
+
+1. Selecciona la primera fila y pulsa **Editar bloque**: ciclos 5, recorrido 5.
+2. Pulsa **Anadir bloque**: ciclos 5, recorrido 10 y guarda.
+3. Deja la pausa despues del bloque en 0 para continuar sin pausa programada.
+4. Calibra un maximo de al menos 10 mm, vuelve al minimo, confirma la preparacion
+   e inicia el ensayo una sola vez.
+
+Cada ciclo va del cero al desplazamiento de su bloque y vuelve al cero. Las
+filas se ejecutan en orden, con un solo registro CSV para toda la secuencia.
