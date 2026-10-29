@@ -37,21 +37,13 @@ class App:
         self.error = None
         self.outcome = 'Completed'
         root.title('ESP32 + Mega cyclic test bench' + (' — DEMO' if demo else ''))
-        root.geometry('1440x880')
+        root.geometry('1280x720')
+        root.minsize(1100, 660)
         root.protocol('WM_DELETE_WINDOW', self.close)
-        sidebar = ttk.Frame(root)
-        sidebar.pack(side='left', fill='y')
-        scroll = tk.Canvas(sidebar, width=490, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(sidebar, orient='vertical', command=scroll.yview)
-        scroll.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side='right', fill='y')
-        scroll.pack(side='left', fill='y', expand=True)
-        left = ttk.Frame(scroll, padding=12)
-        scroll.create_window((0, 0), window=left, anchor='nw')
-        left.bind('<Configure>', lambda _: scroll.configure(scrollregion=scroll.bbox('all')))
-        scroll.bind('<Enter>', lambda _: scroll.bind_all('<MouseWheel>',
-            lambda event: scroll.yview_scroll(-int(event.delta/120), 'units')))
-        scroll.bind('<Leave>', lambda _: scroll.unbind_all('<MouseWheel>'))
+        left = ttk.Frame(root, padding=8)
+        left.pack(side='left', fill='y')
+        right = ttk.Frame(root, padding=(0, 8, 8, 8))
+        right.pack(side='right', fill='both', expand=True)
         self.editable = []
         self.esp_name = tk.StringVar(value='COM30')
         self.motor_name = tk.StringVar(value='COM5')
@@ -59,43 +51,45 @@ class App:
         self.supply = tk.StringVar(value='3.3')
         self.fixed_resistor = tk.StringVar(value='2400')
         self.alpha = tk.StringVar(value='1.0')
-        self.status = tk.StringVar(value='Disconnected' if not demo else 'Demo — no hardware commands')
-        self.readings = tk.StringVar(value='Resistance: —\nRelative resistance: —\nEstimated displacement: —')
-        ttk.Label(left, text='Connections and sensor', font=('', 13, 'bold')).pack(anchor='w')
-        for label, variable, values in [('ESP32 port · 115200 baud', self.esp_name, []),
-                                         ('Mega port · 9600 baud', self.motor_name, []),
-                                         ('Sensor preset', self.sensor, list(SENSORS))]:
-            ttk.Label(left, text=label).pack(anchor='w')
-            box = ttk.Combobox(left, textvariable=variable, values=values, width=46)
-            box.pack(fill='x', pady=2)
+        self.status = tk.StringVar(value='Disconnected' if not demo else 'DEMO')
+        self.readings = tk.StringVar(value='Resistencia: -- | Desplazamiento: --')
+        connections = ttk.LabelFrame(left, text='Conexion y sensor', padding=6)
+        connections.pack(fill='x', pady=(0, 5))
+        connections.columnconfigure(1, weight=1)
+        connections.columnconfigure(3, weight=1)
+        for row, (label, variable, values) in enumerate([
+                ('ESP32 / 115200', self.esp_name, []),
+                ('Mega / 9600', self.motor_name, []),
+                ('Sensor', self.sensor, list(SENSORS))]):
+            ttk.Label(connections, text=label).grid(row=row, column=0, sticky='w', padx=(0, 6), pady=2)
+            box = ttk.Combobox(connections, textvariable=variable, values=values, width=16)
+            box.grid(row=row, column=1, columnspan=3, sticky='ew', pady=2)
             self.editable.append(box)
         self.sensor_box = box
         box.bind('<<ComboboxSelected>>', self.instructions)
-        for label, variable in [('Resistencia fija del divisor (Ω)', self.fixed_resistor),
-                                 ('Measured divider supply (V)', self.supply),
-                                 ('Display smoothing alpha (1 = raw)', self.alpha)]:
-            ttk.Label(left, text=label).pack(anchor='w')
-            entry = ttk.Entry(left, textvariable=variable)
-            entry.pack(fill='x')
+        for row, label, variable in [(3, 'Resistor (ohm)', self.fixed_resistor),
+                                      (4, 'Alimentacion (V)', self.supply),
+                                      (5, 'Suavizado (0-1)', self.alpha)]:
+            ttk.Label(connections, text=label).grid(row=row, column=0, sticky='w', pady=2)
+            entry = ttk.Entry(connections, textvariable=variable, width=12)
+            entry.grid(row=row, column=1, columnspan=3, sticky='ew', pady=2)
             self.editable.append(entry)
-        self.wiring = ttk.Label(left, wraplength=420)
-        self.wiring.pack(pady=6)
-        self.refresh_button = ttk.Button(left, text='Refresh ports', command=self.refresh)
-        self.refresh_button.pack(fill='x')
-        self.connect_button = ttk.Button(left, text='Connect both boards', command=self.connect)
-        self.connect_button.pack(fill='x', pady=4)
+        self.refresh_button = ttk.Button(connections, text='Actualizar puertos', command=self.refresh)
+        self.refresh_button.grid(row=6, column=0, columnspan=2, sticky='ew', pady=(4, 0))
+        self.connect_button = ttk.Button(connections, text='Conectar placas', command=self.connect)
+        self.connect_button.grid(row=6, column=2, columnspan=2, sticky='ew', padx=(4, 0), pady=(4, 0))
         self.editable.extend([self.refresh_button, self.connect_button])
-        jog_panel = ttk.LabelFrame(left, text='Posicionamiento manual — mantener pulsado', padding=6)
-        jog_panel.pack(fill='x', pady=6)
+        jog_panel = ttk.LabelFrame(left, text='Movimiento manual', padding=6)
+        jog_panel.pack(fill='x', pady=(0, 5))
         self.jog_speed = tk.StringVar(value='0.2')
-        ttk.Label(jog_panel, text='Velocidad (mm/s)').pack(side='left')
+        ttk.Label(jog_panel, text='mm/s').pack(side='left')
         speed_box = ttk.Spinbox(jog_panel, textvariable=self.jog_speed, from_=0.05, to=1,
-                                increment=.05, width=6)
+                                increment=.05, width=5)
         speed_box.pack(side='left', padx=4)
         self.editable.append(speed_box)
         self.jog_buttons = []
-        for label, direction in [('◀ Avanzar', -1), ('Retroceder ▶', 1)]:
-            button = ttk.Button(jog_panel, text=label, state='disabled')
+        for label, direction in [('Avanzar', -1), ('Retroceder', 1)]:
+            button = ttk.Button(jog_panel, text=label, state='disabled', width=12)
             button.pack(side='left', padx=2)
             button.bind('<ButtonPress-1>', lambda event, d=direction: self.jog_press(d))
             button.bind('<ButtonRelease-1>', lambda event: self.jog_release())
@@ -104,78 +98,71 @@ class App:
         self.root.bind('<ButtonRelease-1>', lambda event: self.jog_release(), add='+')
         self.root.bind('<FocusOut>', lambda event: self.root.after_idle(self.check_jog_focus), add='+')
         self.root.bind('<Unmap>', lambda event: self.stop() if event.widget == self.root and self.jog.active else None, add='+')
-        self.jog_hint = ttk.Label(left, text='Necesita firmware con soporte JOG.', wraplength=440)
-        self.jog_hint.pack()
-        travel_panel = ttk.LabelFrame(left, text='Calibracion de recorrido por pulsos', padding=6)
-        travel_panel.pack(fill='x', pady=6)
+        travel_panel = ttk.LabelFrame(left, text='Recorrido', padding=6)
+        travel_panel.pack(fill='x', pady=(0, 5))
         self.travel_text = tk.StringVar()
-        ttk.Label(travel_panel, textvariable=self.travel_text, wraplength=440).pack(anchor='w')
+        ttk.Label(travel_panel, textvariable=self.travel_text).grid(row=0, column=0, columnspan=4, sticky='w')
         self.travel_buttons = []
-        for label, action in [('Fijar cero', 'zero'), ('Fijar maximo', 'maximum'), ('Borrar calibracion', 'clear')]:
-            button = ttk.Button(travel_panel, text=label, command=lambda a=action: self.calibrate_travel(a))
-            button.pack(fill='x', pady=2)
+        for col, (label, action) in enumerate([('Fijar minimo', 'zero'), ('Fijar maximo', 'maximum'), ('Borrar', 'clear')]):
+            button = ttk.Button(travel_panel, text=label, width=13,
+                                command=lambda a=action: self.calibrate_travel(a))
+            button.grid(row=1, column=col, padx=(0, 3), pady=(4, 0))
             self.travel_buttons.append(button)
-        self.return_button = ttk.Button(travel_panel, text='Volver al minimo', command=self.return_to_minimum)
-        self.return_button.pack(fill='x', pady=2)
-        ttk.Label(travel_panel, text='Fija cero -> avanza -> fija maximo -> vuelve a 0 mm. '
-                  'Maximo de ensayo; no es un final de carrera. El movimiento manual sigue bajo tu control.',
-                  wraplength=440).pack(anchor='w')
+        self.return_button = ttk.Button(travel_panel, text='Volver al minimo', width=15, command=self.return_to_minimum)
+        self.return_button.grid(row=2, column=0, columnspan=2, sticky='w', pady=(4, 0))
         self.update_travel()
-        ttk.Label(left, text='Secuencia de bloques (maximo 10)', font=('', 12, 'bold')).pack(pady=6)
-        names = ('Cycles', 'mm', 'F mm/s', 'Max s', 'B mm/s', 'Zero s', 'After s')
-        self.table = ttk.Treeview(left, columns=names, show='headings', height=5, selectmode='browse')
+        sequence = ttk.LabelFrame(left, text='Secuencia de bloques', padding=6)
+        sequence.pack(fill='x', pady=(0, 5))
+        names = ('Ciclos', 'mm', 'Av mm/s', 'Max s', 'Rt mm/s', 'Cero s', 'Fin s')
+        self.table = ttk.Treeview(sequence, columns=names, show='headings', height=4, selectmode='browse')
         for name in names:
             self.table.heading(name, text=name)
-            self.table.column(name, width=62, stretch=False)
-        self.table.pack(fill='x')
-        ttk.Label(left, text='Cada fila se ejecuta despues de la anterior, sin reiniciar el ensayo.\n'
-                  'Ejemplo: bloque 1 = 5 ciclos de 5 mm; bloque 2 = 5 ciclos de 10 mm.',
-                  wraplength=440).pack(anchor='w', pady=4)
-        self.summary = tk.StringVar()
-        ttk.Label(left, textvariable=self.summary, wraplength=440).pack(pady=4)
-        ttk.Label(left, text='Motor 17HS4401 · driver A4988 · recorrido definido por el usuario. '
-                  'Velocidad permitida: 0,05–1 mm/s (máximo probado por el usuario).',
-                  wraplength=440).pack(pady=4)
+            self.table.column(name, width=55, stretch=True)
+        self.table.grid(row=0, column=0, sticky='nsew')
+        table_scroll = ttk.Scrollbar(sequence, orient='vertical', command=self.table.yview)
+        table_scroll.grid(row=0, column=1, sticky='ns')
+        self.table.configure(yscrollcommand=table_scroll.set)
         self.table.bind('<Double-1>', lambda _: self.edit_block())
-        buttons = ttk.Frame(left)
-        buttons.pack(fill='x', pady=4)
-        for text, command in [('Anadir bloque', self.add_block), ('Editar bloque', self.edit_block), ('Eliminar bloque', self.remove_block)]:
-            button = ttk.Button(buttons, text=text, command=command)
-            button.pack(side='left', expand=True, fill='x')
+        buttons = ttk.Frame(sequence)
+        buttons.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(4, 0))
+        for text, command in [('Anadir bloque', self.add_block), ('Editar', self.edit_block), ('Eliminar', self.remove_block)]:
+            button = ttk.Button(buttons, text=text, command=command, width=14)
+            button.pack(side='left', padx=(0, 4))
             self.editable.append(button)
+        self.summary = tk.StringVar()
+        ttk.Label(sequence, textvariable=self.summary).grid(row=2, column=0, columnspan=2, sticky='w', pady=(3, 0))
         self.zero = tk.BooleanVar(value=False)
-        self.zero_check = ttk.Checkbutton(left, variable=self.zero,
-            text='Starting position set to zero; tendon and resistor ready')
-        self.zero_check.pack(pady=6)
+        self.zero_check = ttk.Checkbutton(left, variable=self.zero, text='Cero y montaje verificados')
+        self.zero_check.pack(anchor='w', pady=(0, 4))
         self.editable.append(self.zero_check)
-        self.start_button = ttk.Button(left, text='Start experiment', command=self.start, state='disabled')
-        self.start_button.pack(fill='x', pady=3)
-        self.stop_button = ttk.Button(left, text='STOP motor', command=self.stop, state='disabled')
-        self.stop_button.pack(fill='x', pady=3)
-        ttk.Button(left, text='Save results as…', command=self.save).pack(fill='x', pady=3)
-        ttk.Label(left, textvariable=self.readings, font=('', 12), wraplength=440).pack(pady=10)
-        ttk.Label(left, textvariable=self.status, wraplength=440).pack()
-        figure = Figure(figsize=(8, 8), tight_layout=True)
+        actions = ttk.Frame(left)
+        actions.pack(fill='x')
+        self.start_button = ttk.Button(actions, text='Iniciar ensayo', command=self.start, state='disabled', width=14)
+        self.start_button.pack(side='left', padx=(0, 4))
+        self.stop_button = ttk.Button(actions, text='STOP motor', command=self.stop, state='disabled', width=12)
+        self.stop_button.pack(side='left', padx=(0, 4))
+        ttk.Button(actions, text='Guardar CSV', command=self.save, width=12).pack(side='left')
+        ttk.Label(right, textvariable=self.status, wraplength=600).pack(side='bottom', anchor='w', pady=(4, 0))
+        ttk.Label(right, textvariable=self.readings, wraplength=600).pack(side='bottom', anchor='w', pady=(4, 0))
+        figure = Figure(figsize=(7, 5), tight_layout=True)
         self.ax = figure.subplots()
-        self.ax.set_title('Resistencia frente a desplazamiento')
-        self.ax.set_xlabel('Desplazamiento estimado (mm)')
-        self.ax.set_ylabel('Resistencia (Ω)')
+        self.ax.set_title('Resistencia frente a tiempo')
+        self.ax.set_xlabel('Tiempo (s)')
+        self.ax.set_ylabel('Resistencia (ohm)')
         self.ax.grid(alpha=0.3)
         self.ax.ticklabel_format(useOffset=False, style='plain')
         self.line, = self.ax.plot([], [], linewidth=1)
-        self.canvas = FigureCanvasTkAgg(figure, master=root)
-        self.canvas.get_tk_widget().pack(side='right', fill='both', expand=True)
+        self.canvas = FigureCanvasTkAgg(figure, master=right)
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
         self.instructions()
         self.refresh()
         self.update_table()
+        self.controls()
         root.after(20, self.poll)
 
     def instructions(self, *_):
-        fixed, low, high = SENSORS.get(self.sensor.get(), SENSORS['Sensor 2'])
+        fixed, _, _ = SENSORS.get(self.sensor.get(), SENSORS['Sensor 2'])
         self.fixed_resistor.set(f'{fixed:g}')
-        self.wiring.config(text=f'GPIO4 · resistor sugerido {fixed:g} Ω · rango {low:g}–{high:g} Ω\n'
-                           'Introduce arriba el valor real de la resistencia instalada.\n'
-                           '3V3 → sensor → GPIO4 → fixed resistor → GND')
 
     def refresh(self):
         names = [p.device for p in list_ports.comports()]
@@ -186,8 +173,9 @@ class App:
         self.table.delete(*self.table.get_children())
         for i, block in enumerate(self.blocks):
             self.table.insert('', 'end', iid=str(i), values=[format(v, '.6g') for v in block.values()])
-        self.summary.set(f'{len(self.blocks)} bloques en secuencia | {sum(int(b.cycles) for b in self.blocks)} ciclos · '
-                         f'duración nominal {sum(b.duration() for b in self.blocks):.1f} s')
+        self.summary.set(f'Bloques: {len(self.blocks)} | Ciclos: {sum(int(b.cycles) for b in self.blocks)} | '
+                         f'Tiempo: {sum(b.duration() for b in self.blocks):.1f} s')
+
 
     def add_block(self):
         if not self.active and not self.jog.active and len(self.blocks) < 10:
@@ -260,15 +248,13 @@ class App:
             button.configure(state='normal' if not self.returning and self.ready and self.jog_supported and
                              not self.active and not self.connecting and self.jog.state not in
                              ('stopping', 'waiting_ready') else 'disabled')
-        self.jog_hint.configure(text='Soltar, salir del botón o cambiar de ventana detiene el motor.'
-                                if self.jog_supported else 'Carga Mega_Cyclic_Telemetry con soporte JOG para habilitar estos botones.')
 
     def update_travel(self):
         position = self.travel.position
         maximum = self.travel.maximum
-        self.travel_text.set('Posicion: ' + ('--' if position is None else f'{position:.4f} mm') +
-                             '\nMaximo: ' + ('sin fijar' if maximum is None else f'{maximum:.4f} mm') +
-                             (' | DEMO' if self.demo else ' | pulsos enviados'))
+        self.travel_text.set('Pos: ' + ('--' if position is None else f'{position:.4f} mm') +
+                             ' | Max: ' + ('sin fijar' if maximum is None else f'{maximum:.4f} mm') +
+                             (' | DEMO' if self.demo else ''))
 
     def calibrate_travel(self, action):
         if self.active or self.jog.active or self.connecting or not self.ready:
@@ -651,17 +637,13 @@ class App:
             return
         r0 = self.data.initial_resistance
         rows = self.rows[-2500:]
-        self.line.set_data([r[4] for r in rows], [r[11] for r in rows])
+        self.line.set_data([r[0] for r in rows], [r[11] for r in rows])
         self.ax.relim()
         self.ax.autoscale_view()
         r = rows[-1]
-        source = 'pulsos ejecutados' if r[13] == 'step_telemetry' else 'estimación por velocidad/tiempo'
-        self.ax.set_xlabel('Desplazamiento por pulsos (mm)' if r[13] == 'step_telemetry'
-                                else 'Desplazamiento estimado (mm)')
-        self.readings.set(f'Voltage: {r[1]:.6f} V\nResistance: {r[2]:.3f} Ω · R₀: {r0:.3f} Ω\n'
-                          f'Relative resistance: {r[3]:.3f}%\nDesplazamiento: {r[4]:.4f} mm\n'
-                          f'Vueltas: {r[12]:.5f} · {source}\n'
-                          f'Block {r[5]} · Cycle {r[6]} · {r[7]}')
+        self.readings.set(f'R: {r[2]:.3f} ohm | R0: {r0:.3f} ohm | Relativa: {r[3]:.3f}%\n'
+                          f'Tiempo: {r[0]:.2f} s | Desplazamiento: {r[4]:.4f} mm\n'
+                          f'Bloque {r[5]} | Ciclo {r[6]} | {r[7]}')
         self.status.set(f'{self.protocol.stage} · {len(self.rows)} samples · '
                         f'{self.data.dropped} dropped · {self.data.invalid} invalid' + (' · DEMO' if self.demo else ''))
         self.canvas.draw_idle()

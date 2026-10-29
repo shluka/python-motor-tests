@@ -2,11 +2,43 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from plot_sensor_test import read_measurements
+from plot_sensor_test import make_figure, read_measurements
 from sensor_core import Acquisition, Frame
 
 
 class PlotDataTests(unittest.TestCase):
+    def test_compare_csvs_with_independent_baselines_and_shared_colors(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'first.csv'
+            second = Path(directory) / 'second.csv'
+            first.write_text('Time_s,Resistance_ohm\n0,100\n1,150\n')
+            second.write_text('Time_s,Resistance_ohm\n0,200\n2,180\n3,220\n')
+            figure = make_figure([first, second])
+            try:
+                resistance, relative = figure.axes
+                self.assertEqual(len(resistance.lines), 2)
+                self.assertEqual(list(relative.lines[0].get_ydata()), [0, 50])
+                self.assertEqual(list(relative.lines[1].get_ydata()), [0, -10, 10])
+                self.assertEqual(list(resistance.lines[1].get_xdata()), [0, 2, 3])
+                for index in (0, 1):
+                    self.assertEqual(resistance.lines[index].get_color(), relative.lines[index].get_color())
+                self.assertIn('second.csv', resistance.get_legend().get_texts()[1].get_text())
+                output = Path(directory) / 'comparison.png'
+                figure.savefig(output)
+                self.assertGreater(output.stat().st_size, 0)
+            finally:
+                plt.close(figure)
+            # Keep supporting existing callers that pass a single path.
+            figure = make_figure(first)
+            self.assertEqual(len(figure.axes[0].lines), 1)
+            plt.close(figure)
+            second.write_text('Time_s,Resistance_ohm\n0,broken\n')
+            with self.assertRaisesRegex(ValueError, 'second.csv'):
+                make_figure([first, second])
+
     def test_export_roundtrip(self):
         data = Acquisition(3.3, 2400)
         for n, voltage in enumerate([1.65, 1.32, 2.2]):

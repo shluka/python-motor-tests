@@ -1,4 +1,4 @@
-"""Select an acquisition CSV and plot resistance and relative resistance."""
+"""Compare acquisition CSVs: resistance and relative resistance against time."""
 import argparse
 import csv
 import math
@@ -55,28 +55,42 @@ def read_measurements(path):
     return times, resistances, relative
 
 
-def make_figure(path):
+def make_figure(paths):
     import matplotlib.pyplot as plt
 
-    times, resistances, relative = read_measurements(path)
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    paths = [Path(path) for path in paths]
+    if not paths:
+        raise ValueError('Select at least one measurement CSV.')
+    measurements = []
+    for path in paths:
+        try:
+            measurements.append(read_measurements(path))
+        except (OSError, ValueError) as exc:
+            raise ValueError(f'{path}: {exc}') from exc
     figure, axes = plt.subplots(2, 1, sharex=True, figsize=(10, 7),
                                 constrained_layout=True)
-    figure.suptitle(f'{Path(path).name}\nInitial resistance R₀ = {resistances[0]:.3f} Ω')
-    axes[0].plot(times, resistances, color='tab:blue', linewidth=1)
+    figure.suptitle('Comparacion de ensayos' if len(paths) > 1 else paths[0].name)
+    for path, (times, resistances, relative) in zip(paths, measurements):
+        label = path.name if sum(p.name == path.name for p in paths) == 1 else str(path)
+        line, = axes[0].plot(times, resistances, linewidth=1,
+                             label=f'{label} (R0={resistances[0]:.3f} ohm)')
+        axes[1].plot(times, relative, color=line.get_color(), linewidth=1, label=label)
     axes[0].set_ylabel('Resistance (Ω)')
     axes[0].ticklabel_format(axis='y', style='plain', useOffset=False)
-    axes[1].plot(times, relative, color='tab:orange', linewidth=1)
     axes[1].axhline(0, color='gray', linewidth=0.7, linestyle='--')
     axes[1].set_ylabel('ΔR/R₀ × 100 (%)')
     axes[1].set_xlabel('Time (s)')
     for ax in axes:
         ax.grid(alpha=0.3)
+        ax.legend(fontsize='small')
     return figure
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('csv', nargs='?', help='CSV path; omit to open a file selector')
+    parser.add_argument('csv', nargs='*', help='CSV paths; omit to select one or more files')
     parser.add_argument('--output', type=Path, help='Also save the figure, e.g. plot.png')
     parser.add_argument('--no-show', action='store_true', help='Save without opening a plot window')
     args = parser.parse_args()
@@ -84,20 +98,20 @@ def main():
         parser.error('--no-show requires --output')
     root = None
     try:
-        path = args.csv
-        if not path:
+        paths = args.csv
+        if not paths:
             import tkinter as tk
             from tkinter import filedialog
             root = tk.Tk()
             root.withdraw()
-            path = filedialog.askopenfilename(title='Select sensor acquisition CSV',
+            paths = filedialog.askopenfilenames(title='Seleccionar CSV de ensayos',
                                               filetypes=[('CSV files', '*.csv')])
-            if not path:
+            if not paths:
                 return
         if args.no_show:
             import matplotlib
             matplotlib.use('Agg')
-        figure = make_figure(path)
+        figure = make_figure(paths)
         if args.output:
             figure.savefig(args.output, dpi=180)
             print(f'Saved {args.output}')

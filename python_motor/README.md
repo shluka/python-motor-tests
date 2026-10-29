@@ -56,7 +56,7 @@ For a simulated experiment without opening serial ports or moving hardware:
    hold maximum s, backward mm/s, hold zero s, and hold after block s.
    Decimal points and decimal commas are accepted in that form.
    Default: one 1 mm cycle at 0.2 mm/s. The table shows total cycles and
-   nominal duration. Scroll the left panel to reach the lower controls.
+   nominal duration. The compact panel keeps the controls visible without scrolling the window.
 4. Establish the mechanical zero and check the hardware confirmation. Start
    experiment uploads CLEAR and each BLOCK with acknowledgments. It records
    the first valid resistance as R0, collects at least 0.5 seconds of sensor
@@ -65,7 +65,7 @@ For a simulated experiment without opening serial ports or moving hardware:
    Closing an active GUI requests STOP; close again after confirmation and
    saving. Re-establish mechanical zero after an interrupted test.
 
-One live graph displays resistance (ohms) versus motor displacement (mm).
+The live graph displays resistance (ohms) versus elapsed acquisition time (s).
 Smoothing alpha affects the displayed resistance only (1 = raw). The graph
 uses the latest 2500 samples. Exports contain all samples, including time and
 relative resistance, for offline analysis.
@@ -125,12 +125,22 @@ From the project root, run:
 .\.venv\Scripts\python.exe python_motor/plot_sensor_test.py
 ```
 
-Select the main measurement CSV. Do not select `_motor_events.csv` or metadata.
-This offline script plots resistance and relative resistance against time;
-the resistance-versus-displacement graph is displayed in the combined live GUI.
+Select one or more measurement CSVs with Ctrl or Shift in the file dialog.
+The two shared plots show resistance and relative resistance versus time.
+Each CSV has its own color and legend entry, and its own initial resistance
+R0 for the relative curve. The time values recorded in each CSV are retained.
+Files may have different sample rates and durations.
 
-Spanish Excel requires importing with comma delimiter and English (United
-States) numeric locale; avoid resaving data with misinterpreted decimal points.
+You can also pass several files directly and save a comparison without opening
+a window:
+
+```powershell
+.\.venv\Scripts\python.exe python_motor/plot_sensor_test.py ensayo1.csv ensayo2.csv --output comparacion.png --no-show
+```
+
+Use original measurement CSVs with Time_s and Resistance_ohm columns. Spanish
+Excel requires comma delimiter and English (United States) numeric locale;
+avoid resaving data with misinterpreted decimal points.
 
 ## Displacement and compatibility
 
@@ -303,3 +313,13 @@ Para 5 ciclos de 5 mm seguidos de 5 ciclos de 10 mm:
 
 Cada ciclo va del cero al desplazamiento de su bloque y vuelve al cero. Las
 filas se ejecutan en orden, con un solo registro CSV para toda la secuencia.
+
+
+## Interfaz compacta
+
+La ventana se abre a 1280 x 720 y admite un minimo de 1100 x 660. Los controles
+estan visibles sin desplazar la ventana; solo la tabla de bloques tiene barra
+para consultar las filas adicionales. Los botones de minimo, maximo y retorno
+son compactos y los textos de ayuda estan en esta guia. La grafica en vivo
+muestra resistencia frente a tiempo y conserva los ultimos 2500 puntos. El CSV
+sigue incluyendo todos los puntos y las cuatro columnas originales.
