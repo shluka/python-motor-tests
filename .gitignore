@@ -1,0 +1,40 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local tooling, build products and logs
+.tools/
+*.log
+*.elf
+*.hex
+*.o
+dist/
+
+# Keep result-folder instructions, exclude experimental recordings
+test_results/*
+!test_results/README.md
+python_motor/Results/*
+!python_motor/Results/README.md
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+.vscode/
+.idea/
+
+# Unrelated local Blender work
+*.blend
+*.blend[0-9]
+rebuild_joint.py
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
