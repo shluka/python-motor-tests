@@ -126,10 +126,14 @@ From the project root, run:
 ```
 
 Select one or more measurement CSVs with Ctrl or Shift in the file dialog.
-The two shared plots show resistance and relative resistance versus time.
+The three plots show resistance versus time, relative resistance versus time,
+and relative resistance versus displacement (mm).
 Each CSV has its own color and legend entry, and its own initial resistance
 R0 for the relative curve. The time values recorded in each CSV are retained.
-Files may have different sample rates and durations.
+Files may have different sample rates and durations. The displacement plot
+uses Displacement_mm in acquisition order, preserving forward/return cycles.
+Files without that column are listed in the third panel and still appear in
+the time plots.
 
 You can also pass several files directly and save a comparison without opening
 a window:
