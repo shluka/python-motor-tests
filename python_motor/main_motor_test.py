@@ -104,17 +104,17 @@ class App:
         self.root.bind('<Unmap>', lambda event: self.jog_release() if event.widget == self.root else None, add='+')
         self.jog_hint = ttk.Label(left, text='Necesita firmware con soporte JOG.', wraplength=440)
         self.jog_hint.pack()
-        travel_panel = ttk.LabelFrame(left, text='Calibraci?n de recorrido por pulsos', padding=6)
+        travel_panel = ttk.LabelFrame(left, text='Calibracion de recorrido por pulsos', padding=6)
         travel_panel.pack(fill='x', pady=6)
         self.travel_text = tk.StringVar()
         ttk.Label(travel_panel, textvariable=self.travel_text, wraplength=440).pack(anchor='w')
         self.travel_buttons = []
-        for label, action in [('Fijar cero', 'zero'), ('Fijar m?ximo', 'maximum'), ('Borrar calibraci?n', 'clear')]:
+        for label, action in [('Fijar cero', 'zero'), ('Fijar maximo', 'maximum'), ('Borrar calibracion', 'clear')]:
             button = ttk.Button(travel_panel, text=label, command=lambda a=action: self.calibrate_travel(a))
             button.pack(fill='x', pady=2)
             self.travel_buttons.append(button)
-        ttk.Label(travel_panel, text='Fija cero ? avanza ? fija m?ximo ? vuelve a 0 mm. '
-                  'M?ximo de ensayo; no es un final de carrera. El movimiento manual sigue bajo tu control.',
+        ttk.Label(travel_panel, text='Fija cero -> avanza -> fija maximo -> vuelve a 0 mm. '
+                  'Maximo de ensayo; no es un final de carrera. El movimiento manual sigue bajo tu control.',
                   wraplength=440).pack(anchor='w')
         self.update_travel()
         ttk.Label(left, text='Cyclic protocol (maximum 10 blocks)', font=('', 12, 'bold')).pack(pady=6)
@@ -254,9 +254,9 @@ class App:
     def update_travel(self):
         position = self.travel.position
         maximum = self.travel.maximum
-        self.travel_text.set('Posici?n: ' + ('?' if position is None else f'{position:.4f} mm') +
-                             '\nM?ximo: ' + ('sin fijar' if maximum is None else f'{maximum:.4f} mm') +
-                             (' ? DEMO' if self.demo else ' ? pulsos enviados'))
+        self.travel_text.set('Posicion: ' + ('--' if position is None else f'{position:.4f} mm') +
+                             '\nMaximo: ' + ('sin fijar' if maximum is None else f'{maximum:.4f} mm') +
+                             (' | DEMO' if self.demo else ' | pulsos enviados'))
 
     def calibrate_travel(self, action):
         if self.active or self.jog.active or self.connecting or not self.ready:
@@ -272,7 +272,7 @@ class App:
                 self.zero.set(False)
             self.update_travel()
         except ValueError as exc:
-            messagebox.showerror('Calibraci?n', str(exc), parent=self.root)
+            messagebox.showerror('Calibracion', str(exc), parent=self.root)
 
     def jog_press(self, direction):
         if self.active or self.connecting or not self.ready or not self.jog_supported:
@@ -467,7 +467,7 @@ class App:
         if line.startswith('M,'):
             fields = line.split(',')
             if len(fields) != 3 or int(fields[1]) < 0:
-                raise ValueError('Telemetr?a de posici?n inv?lida.')
+                raise ValueError('Telemetria de posicion invalida.')
             self.travel.steps = int(fields[2])
             self.update_travel()
         if line == 'CAPS,JOG,1':

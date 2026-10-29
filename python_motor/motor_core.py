@@ -295,19 +295,19 @@ class TravelCalibration:
 
     def set_zero(self):
         if self.steps is None:
-            raise ValueError('Sin telemetr?a de posici?n. Mueve brevemente el motor y espera su parada.')
+            raise ValueError('Sin telemetria de posicion. Mueve brevemente el motor y espera su parada.')
         self.origin = self.steps
         self.maximum = None
 
     def set_maximum(self):
         if self.position is None or self.position <= 0:
-            raise ValueError('Fija primero el cero y despl?zate en Avanzar hasta un m?ximo positivo.')
+            raise ValueError('Fija primero el cero y desplazate en Avanzar hasta un maximo positivo.')
         self.maximum = self.position
 
     def validate(self, blocks):
         if self.maximum is None:
-            raise ValueError('Calibra el recorrido: fija cero, avanza y fija m?ximo; despu?s vuelve al cero.')
+            raise ValueError('Calibra el recorrido: fija cero, avanza y fija maximo; despues vuelve al cero.')
         if self.position is None or abs(self.position) > Mechanics().displacement(1):
             raise ValueError('Vuelve al cero con los botones antes de iniciar el ensayo (tolerancia: un pulso).')
         if any(b.distance > self.maximum for b in blocks):
-            raise ValueError(f'El ensayo supera el recorrido m?ximo calibrado: {self.maximum:.4f} mm.')
+            raise ValueError(f'El ensayo supera el recorrido maximo calibrado: {self.maximum:.4f} mm.')
