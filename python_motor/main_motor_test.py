@@ -88,7 +88,7 @@ class App:
         speed_box.pack(side='left', padx=4)
         self.editable.append(speed_box)
         self.jog_buttons = []
-        for label, direction in [('Avanzar', -1), ('Retroceder', 1)]:
+        for label, direction in [('Avanzar', 1), ('Retroceder', -1)]:
             button = ttk.Button(jog_panel, text=label, state='disabled', width=12)
             button.pack(side='left', padx=2)
             button.bind('<ButtonPress-1>', lambda event, d=direction: self.jog_press(d))
@@ -132,7 +132,7 @@ class App:
         self.summary = tk.StringVar()
         ttk.Label(sequence, textvariable=self.summary).grid(row=2, column=0, columnspan=2, sticky='w', pady=(3, 0))
         self.zero = tk.BooleanVar(value=False)
-        self.zero_check = ttk.Checkbutton(left, variable=self.zero, text='Cero y montaje verificados')
+        self.zero_check = ttk.Checkbutton(left, variable=self.zero, text='Montaje verificado')
         self.zero_check.pack(anchor='w', pady=(0, 4))
         self.editable.append(self.zero_check)
         actions = ttk.Frame(left)
@@ -221,6 +221,8 @@ class App:
                 values = [float(v.get().strip().replace(',', '.')) for v in fields]
                 block = Block(*values)
                 BENCH_LIMITS.validate(block)
+                if self.travel.maximum is not None:
+                    self.travel.validate([block])
                 self.blocks[i] = block
                 self.update_table()
                 dialog.destroy()
@@ -240,7 +242,7 @@ class App:
             widget.configure(state='disabled' if locked else 'normal')
         self.start_button.configure(state='normal' if self.ready and self.sensor_ready and not locked else 'disabled')
         self.stop_button.configure(state='normal' if self.active or self.jog.active else 'disabled')
-        self.return_button.configure(state='normal' if self.ready and self.return_supported and
+        self.return_button.configure(state='normal' if self.ready and
                                      not locked and self.travel.maximum is not None else 'disabled')
         for button in self.travel_buttons:
             button.configure(state='normal' if self.ready and not locked else 'disabled')
@@ -274,7 +276,12 @@ class App:
             messagebox.showerror('Calibracion', str(exc), parent=self.root)
 
     def return_to_minimum(self):
-        if self.active or self.connecting or self.jog.active or not self.ready or not self.return_supported:
+        if self.active or self.connecting or self.jog.active or not self.ready:
+            return
+        if not self.return_supported:
+            messagebox.showerror('Volver al minimo',
+                                 'Actualiza el firmware Mega_Cyclic_Telemetry del Mega para habilitar el retorno.',
+                                 parent=self.root)
             return
         try:
             command = self.travel.return_command(float(self.jog_speed.get().replace(',', '.')))
@@ -407,7 +414,7 @@ class App:
             return
         try:
             if not self.zero.get():
-                raise ValueError('Set the starting position to zero and confirm the hardware checkbox.')
+                raise ValueError('Confirma el montaje antes de iniciar el ensayo.')
             supply, alpha = float(self.supply.get()), float(self.alpha.get())
             if not math.isfinite(supply) or not 0.1 <= supply <= 3.6:
                 raise ValueError('Supply must be between 0.1 and 3.6 V.')
@@ -428,7 +435,7 @@ class App:
             return
         if not self.demo and not messagebox.askokcancel('Start motor experiment',
                 f'Run {len(self.blocks)} blocks, maximum {max(b.distance for b in self.blocks):g} mm?\n'
-                f'Confirm {fixed:g} Ω is installed and the starting position is zero.'):
+                f'Confirma el resistor de {fixed:g} Ω y la posicion de inicio elegida.'):
             return
         self.protocol = protocol
         self.data = Acquisition(supply, fixed)
@@ -517,7 +524,7 @@ class App:
             if not self.jog.active:
                 self.returning = False
                 self.controls()
-                self.status.set('Motor detenido. Establece el cero antes del ensayo.')
+                self.status.set('Motor detenido.')
             return
         if self.connecting:
             if line == 'READY':
@@ -611,8 +618,7 @@ class App:
                     if stage in ('uploading', 'starting') and now-self.upload_progress > 5:
                         raise ValueError('Motor command acknowledgment timed out.')
                     if stage == 'baseline' and self.baseline_start is not None and now-self.baseline_start >= 0.5:
-                        self.travel.origin = 0
-                        self.travel.steps = 0
+                        self.travel.rebase_for_run()
                         self.send(self.protocol.baseline_ready())
                         self.upload_progress = now
                         self.run_deadline = now + sum(b.duration() for b in self.protocol.blocks)*2 + 30

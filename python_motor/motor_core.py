@@ -306,11 +306,15 @@ class TravelCalibration:
 
     def validate(self, blocks):
         if self.maximum is None:
-            raise ValueError('Calibra el recorrido: fija cero, avanza y fija maximo; despues vuelve al cero.')
-        if self.position is None or abs(self.position) > Mechanics().displacement(1):
-            raise ValueError('Vuelve al cero con los botones antes de iniciar el ensayo (tolerancia: un pulso).')
+            raise ValueError('Fija el minimo y el maximo antes del ensayo.')
         if any(b.distance > self.maximum for b in blocks):
             raise ValueError(f'El ensayo supera el recorrido maximo calibrado: {self.maximum:.4f} mm.')
+
+    def rebase_for_run(self):
+        """RUN resets the firmware counter; keep the physical minimum reference."""
+        if self.origin is not None and self.steps is not None:
+            self.origin -= self.steps
+        self.steps = 0
 
 
     def return_command(self, speed):

@@ -11,8 +11,7 @@ class TravelTests(unittest.TestCase):
         self.assertEqual(c.position, 2)
         c.set_maximum()
         c.steps = 800
-        with self.assertRaises(ValueError):
-            c.validate([Block(distance=1)])
+        c.validate([Block(distance=1)])
         c.steps = -800
         c.validate([Block(distance=2)])
         with self.assertRaises(ValueError):
@@ -35,7 +34,7 @@ class TravelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             c.validate([Block()])
 
-    def test_one_pulse_zero_tolerance_and_all_blocks(self):
+    def test_start_away_from_zero_still_checks_all_block_distances(self):
         c = TravelCalibration()
         c.steps = 0
         c.set_zero()
@@ -45,9 +44,24 @@ class TravelTests(unittest.TestCase):
         c.validate([Block(distance=1), Block(distance=2)])
         with self.assertRaises(ValueError):
             c.validate([Block(distance=1), Block(distance=3)])
-        c.steps = 2
-        with self.assertRaises(ValueError):
+        for steps in (2, 1600, 3200):
+            c.steps = steps
             c.validate([Block()])
+
+    def test_return_keeps_original_minimum_after_run_resets_counter(self):
+        c = TravelCalibration()
+        c.steps = 100
+        c.set_zero()
+        c.steps = 16100
+        c.set_maximum()
+        c.steps = 4900  # Start a cyclic test 3 mm above the minimum.
+        c.rebase_for_run()
+        self.assertEqual(c.position, 3)
+        self.assertEqual(c.maximum, 10)
+        self.assertEqual(c.return_command(.2), 'JOG_TO,-4800,0.200000')
+        c.steps = -4800
+        self.assertEqual(c.position, 0)
+        self.assertIsNone(c.return_command(.2))
 
     def test_return_target_uses_original_pulse_zero(self):
         c = TravelCalibration()
@@ -110,3 +124,36 @@ class TravelTests(unittest.TestCase):
         app.stop()
         self.assertFalse(app.returning)
         app.send.assert_called_with('STOP')
+
+    def test_gui_starts_away_from_zero_and_rejects_excess_distance(self):
+        from unittest.mock import Mock, patch
+        from main_motor_test import App
+        from motor_core import JogController
+        app = App.__new__(App)
+        app.active = False
+        app.demo = app.ready = app.sensor_ready = app.saved = True
+        app.jog = JogController()
+        app.travel = TravelCalibration()
+        app.travel.steps = 0
+        app.travel.set_zero()
+        app.travel.steps = 16000
+        app.travel.set_maximum()
+        app.travel.steps = 4800
+        for name, value in [('zero', True), ('supply', '3.3'), ('alpha', '1'),
+                            ('fixed_resistor', '2400'), ('sensor', 'Sensor 2'),
+                            ('esp_name', 'DEMO'), ('motor_name', 'DEMO')]:
+            setattr(app, name, Mock(get=Mock(return_value=value)))
+        app.blocks = [Block(distance=5)]
+        app.esp = None
+        app.controls = app.send = app.status = Mock()
+        app.start()
+        self.assertTrue(app.active)
+        self.assertEqual(app.protocol.stage, 'baseline')
+        self.assertEqual(app.travel.position, 3)
+        app.active = False
+        app.saved = True
+        app.blocks = [Block(distance=11)]
+        with patch('main_motor_test.messagebox.showerror') as error:
+            app.start()
+            error.assert_called_once()
+        self.assertFalse(app.active)

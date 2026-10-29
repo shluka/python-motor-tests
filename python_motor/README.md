@@ -57,7 +57,7 @@ For a simulated experiment without opening serial ports or moving hardware:
    Decimal points and decimal commas are accepted in that form.
    Default: one 1 mm cycle at 0.2 mm/s. The table shows total cycles and
    nominal duration. The compact panel keeps the controls visible without scrolling the window.
-4. Establish the mechanical zero and check the hardware confirmation. Start
+4. Choose the starting position and check the hardware confirmation. Start
    experiment uploads CLEAR and each BLOCK with acknowledgments. It records
    the first valid resistance as R0, collects at least 0.5 seconds of sensor
    baseline, and only then sends RUN.
@@ -265,34 +265,23 @@ still require a bench check. Tests do not initiate physical motor movement.
   writable location before closing or starting another test.
 
 
-## Calibraci?n del recorrido m?ximo
+## Calibracion del recorrido maximo
 
-Con las placas conectadas y el motor parado:
+Con las placas conectadas y el motor parado, pulsa **Fijar minimo** en el origen
+que elijas. Mueve el motor con **Avanzar** y pulsa **Fijar maximo** en el extremo
+de trabajo. El recorrido se calcula a partir de pulsos (1600 pulsos/mm).
 
-1. Coloca el carro en el origen con los botones manuales y pulsa **Fijar cero**.
-   Si a?n no hay telemetr?a, realiza antes un movimiento corto y espera la parada.
-2. Mant?n **Avanzar** hasta el extremo de trabajo elegido, suelta y espera la
-   confirmaci?n de parada. Pulsa **Fijar m?ximo** para registrar el recorrido en mm.
-3. Vuelve con **Retroceder** hasta 0 mm (tolerancia de un pulso, 0,000625 mm).
-   Reduce la velocidad para aproximarte. No pulses Fijar cero otra vez: borrar?a
-   el m?ximo. Confirma despu?s la casilla de preparaci?n del ensayo.
-4. Los bloques no pueden superar el m?ximo registrado y el ensayo solo arranca
-   desde el cero calibrado. Al terminar se mantiene el m?ximo para otro ensayo.
+Cada bloque debe tener una distancia menor o igual al maximo guardado. Este
+limite se verifica al editar un bloque y al iniciar el ensayo. No es obligatorio
+volver al minimo ni estar exactamente en cero para iniciar: basta confirmar
+**Montaje verificado**. Los ciclos parten de la posicion elegida al iniciar.
 
-La posici?n se calcula con los pulsos enviados por el Mega (1600 pulsos/mm),
-no con un encoder. Avanzar corresponde al sentido positivo del protocolo c?clico.
-La calibraci?n se pierde al reconectar, al detectar un reinicio del Mega o una
-p?rdida de referencia. No se guarda entre sesiones. El modo demo simula tambi?n
-el posicionamiento y la calibraci?n.
-
-Este m?ximo valida los ensayos; **no detiene el movimiento manual en el l?mite**
-y no sustituye un final de carrera. El operador debe soltar el bot?n antes del
-extremo mec?nico. Requiere el firmware Mega_Cyclic_Telemetry con soporte JOG.
-
+La calibracion se borra al reconectar. El maximo valida las distancias de los
+bloques; no es un final de carrera ni detiene los botones manuales en el limite.
 
 ## Volver al minimo y secuencias de bloques
 
-Tras fijar cero y maximo, **Volver al minimo** lleva el motor al cero guardado
+Tras fijar minimo y maximo, **Volver al minimo** lleva el motor al cero guardado
 usando la velocidad manual seleccionada. El Mega detiene los pulsos exactamente
 en el contador objetivo; STOP motor cancela el retorno. La perdida de foco o
 minimizar la ventana tambien solicita parada. No hay movimiento al conectar.
@@ -308,8 +297,8 @@ Para 5 ciclos de 5 mm seguidos de 5 ciclos de 10 mm:
 1. Selecciona la primera fila y pulsa **Editar bloque**: ciclos 5, recorrido 5.
 2. Pulsa **Anadir bloque**: ciclos 5, recorrido 10 y guarda.
 3. Deja la pausa despues del bloque en 0 para continuar sin pausa programada.
-4. Calibra un maximo de al menos 10 mm, vuelve al minimo, confirma la preparacion
-   e inicia el ensayo una sola vez.
+4. Fija un maximo de al menos 10 mm, confirma el montaje e inicia el ensayo.
+   Volver al minimo es opcional.
 
 Cada ciclo va del cero al desplazamiento de su bloque y vuelve al cero. Las
 filas se ejecutan en orden, con un solo registro CSV para toda la secuencia.
@@ -323,3 +312,8 @@ para consultar las filas adicionales. Los botones de minimo, maximo y retorno
 son compactos y los textos de ayuda estan en esta guia. La grafica en vivo
 muestra resistencia frente a tiempo y conserva los ultimos 2500 puntos. El CSV
 sigue incluyendo todos los puntos y las cuatro columnas originales.
+
+El retorno conserva el minimo original aunque RUN reinicie el contador de
+pulsos. Avanzar usa el sentido positivo del protocolo ciclico. Si el Mega no
+anuncia CAPS,RETURN,1, al pulsar Volver al minimo se indica que hay que cargar
+el firmware Mega_Cyclic_Telemetry actualizado. No se envia movimiento en ese caso.
