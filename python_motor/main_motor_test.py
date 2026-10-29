@@ -14,7 +14,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from sensor_core import Acquisition, Frame, SENSORS, parse_frame
-from motor_core import Block, MotorProtocol, LineBuffer, Mechanics, BENCH_LIMITS, JogController
+from motor_core import Block, MotorProtocol, LineBuffer, Mechanics, BENCH_LIMITS, JogController, TravelCalibration
 
 
 class App:
@@ -24,6 +24,7 @@ class App:
         self.active = self.connecting = False
         self.ready = self.sensor_ready = False
         self.jog = JogController()
+        self.travel = TravelCalibration()
         self.jog_supported = demo
         self.saved = True
         self.data = self.protocol = None
@@ -103,6 +104,19 @@ class App:
         self.root.bind('<Unmap>', lambda event: self.jog_release() if event.widget == self.root else None, add='+')
         self.jog_hint = ttk.Label(left, text='Necesita firmware con soporte JOG.', wraplength=440)
         self.jog_hint.pack()
+        travel_panel = ttk.LabelFrame(left, text='Calibraci?n de recorrido por pulsos', padding=6)
+        travel_panel.pack(fill='x', pady=6)
+        self.travel_text = tk.StringVar()
+        ttk.Label(travel_panel, textvariable=self.travel_text, wraplength=440).pack(anchor='w')
+        self.travel_buttons = []
+        for label, action in [('Fijar cero', 'zero'), ('Fijar m?ximo', 'maximum'), ('Borrar calibraci?n', 'clear')]:
+            button = ttk.Button(travel_panel, text=label, command=lambda a=action: self.calibrate_travel(a))
+            button.pack(fill='x', pady=2)
+            self.travel_buttons.append(button)
+        ttk.Label(travel_panel, text='Fija cero ? avanza ? fija m?ximo ? vuelve a 0 mm. '
+                  'M?ximo de ensayo; no es un final de carrera. El movimiento manual sigue bajo tu control.',
+                  wraplength=440).pack(anchor='w')
+        self.update_travel()
         ttk.Label(left, text='Cyclic protocol (maximum 10 blocks)', font=('', 12, 'bold')).pack(pady=6)
         names = ('Cycles', 'mm', 'F mm/s', 'Max s', 'B mm/s', 'Zero s', 'After s')
         self.table = ttk.Treeview(left, columns=names, show='headings', height=5, selectmode='browse')
@@ -228,6 +242,8 @@ class App:
             widget.configure(state='disabled' if locked else 'normal')
         self.start_button.configure(state='normal' if self.ready and self.sensor_ready and not locked else 'disabled')
         self.stop_button.configure(state='normal' if self.active else 'disabled')
+        for button in self.travel_buttons:
+            button.configure(state='normal' if self.ready and not locked else 'disabled')
         for button in self.jog_buttons:
             button.configure(state='normal' if self.ready and self.jog_supported and
                              not self.active and not self.connecting and self.jog.state not in
@@ -235,11 +251,38 @@ class App:
         self.jog_hint.configure(text='Soltar, salir del botón o cambiar de ventana detiene el motor.'
                                 if self.jog_supported else 'Carga Mega_Cyclic_Telemetry con soporte JOG para habilitar estos botones.')
 
+    def update_travel(self):
+        position = self.travel.position
+        maximum = self.travel.maximum
+        self.travel_text.set('Posici?n: ' + ('?' if position is None else f'{position:.4f} mm') +
+                             '\nM?ximo: ' + ('sin fijar' if maximum is None else f'{maximum:.4f} mm') +
+                             (' ? DEMO' if self.demo else ' ? pulsos enviados'))
+
+    def calibrate_travel(self, action):
+        if self.active or self.jog.active or self.connecting or not self.ready:
+            return
+        try:
+            if action == 'zero':
+                self.travel.set_zero()
+                self.zero.set(False)
+            elif action == 'maximum':
+                self.travel.set_maximum()
+            else:
+                self.travel = TravelCalibration()
+                self.zero.set(False)
+            self.update_travel()
+        except ValueError as exc:
+            messagebox.showerror('Calibraci?n', str(exc), parent=self.root)
+
     def jog_press(self, direction):
         if self.active or self.connecting or not self.ready or not self.jog_supported:
             return 'break'
         try:
             speed = float(self.jog_speed.get().replace(',', '.'))
+            if self.demo and not self.jog.active:
+                self.demo_jog_time = time.monotonic()
+                self.demo_jog_steps = self.travel.steps or 0
+                self.demo_jog_direction, self.demo_jog_speed = direction, speed
             command = self.jog.start(direction, speed, time.monotonic())
             if command:
                 self.zero.set(False)
@@ -282,6 +325,8 @@ class App:
         self.jog_supported = self.demo
         if self.demo:
             self.ready = self.sensor_ready = True
+            self.travel.steps = 0
+            self.update_travel()
             self.status.set('Demo connected — no hardware commands')
             self.controls()
             return
@@ -299,6 +344,9 @@ class App:
             self.connection_error(str(exc))
 
     def disconnect(self):
+        self.travel = TravelCalibration()
+        self.zero.set(False)
+        self.update_travel()
         for port in (self.esp, self.motor):
             if port:
                 port.close()
@@ -342,6 +390,7 @@ class App:
             mechanics = Mechanics()  # Fixed calibration matching the motor firmware.
             for block in self.blocks:
                 BENCH_LIMITS.validate(block)
+            self.travel.validate(self.blocks)
             protocol = MotorProtocol(self.blocks, mechanics)
         except (ValueError, KeyError) as exc:
             messagebox.showerror('Configuration', str(exc))
@@ -415,7 +464,16 @@ class App:
     def on_motor(self, line, now):
         if not line:
             return
+        if line.startswith('M,'):
+            fields = line.split(',')
+            if len(fields) != 3 or int(fields[1]) < 0:
+                raise ValueError('Telemetr?a de posici?n inv?lida.')
+            self.travel.steps = int(fields[2])
+            self.update_travel()
         if line == 'CAPS,JOG,1':
+            self.travel = TravelCalibration()
+            self.zero.set(False)
+            self.update_travel()
             self.jog_supported = True
             return
         if self.jog.active:
@@ -459,6 +517,12 @@ class App:
     def poll(self):
         now = time.monotonic()
         try:
+            if self.demo and self.jog.active:
+                dt = max(0, now - self.demo_jog_time)
+                self.demo_jog_time = now
+                self.demo_jog_steps += self.demo_jog_direction * self.demo_jog_speed * 1600 * dt
+                self.travel.steps = round(self.demo_jog_steps)
+                self.update_travel()
             if self.jog.active:
                 self.send(self.jog.tick(now))
             if self.motor:
@@ -504,6 +568,8 @@ class App:
                     if stage in ('uploading', 'starting') and now-self.upload_progress > 5:
                         raise ValueError('Motor command acknowledgment timed out.')
                     if stage == 'baseline' and self.baseline_start is not None and now-self.baseline_start >= 0.5:
+                        self.travel.origin = 0
+                        self.travel.steps = 0
                         self.send(self.protocol.baseline_ready())
                         self.upload_progress = now
                         self.run_deadline = now + sum(b.duration() for b in self.protocol.blocks)*2 + 30
@@ -568,6 +634,11 @@ class App:
     def finish(self, outcome):
         self.active = False
         self.outcome = outcome
+        if self.demo:
+            self.travel.steps = round(self.protocol.position(time.monotonic()) * 1600)
+        if not self.ready:
+            self.travel = TravelCalibration()
+        self.update_travel()
         self.zero.set(False)
         self.controls()
         self.draw()

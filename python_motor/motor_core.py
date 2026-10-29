@@ -280,3 +280,34 @@ class LineBuffer:
         if len(self.buffer) > 4096:
             raise ValueError('Unterminated serial line exceeds size limit.')
         return lines
+
+
+class TravelCalibration:
+    """Session reference from commanded pulse telemetry, not encoder feedback."""
+    def __init__(self):
+        self.steps = self.origin = self.maximum = None
+
+    @property
+    def position(self):
+        if self.steps is None or self.origin is None:
+            return None
+        return Mechanics().displacement(self.steps - self.origin)
+
+    def set_zero(self):
+        if self.steps is None:
+            raise ValueError('Sin telemetr?a de posici?n. Mueve brevemente el motor y espera su parada.')
+        self.origin = self.steps
+        self.maximum = None
+
+    def set_maximum(self):
+        if self.position is None or self.position <= 0:
+            raise ValueError('Fija primero el cero y despl?zate en Avanzar hasta un m?ximo positivo.')
+        self.maximum = self.position
+
+    def validate(self, blocks):
+        if self.maximum is None:
+            raise ValueError('Calibra el recorrido: fija cero, avanza y fija m?ximo; despu?s vuelve al cero.')
+        if self.position is None or abs(self.position) > Mechanics().displacement(1):
+            raise ValueError('Vuelve al cero con los botones antes de iniciar el ensayo (tolerancia: un pulso).')
+        if any(b.distance > self.maximum for b in blocks):
+            raise ValueError(f'El ensayo supera el recorrido m?ximo calibrado: {self.maximum:.4f} mm.')

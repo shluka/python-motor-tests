@@ -253,3 +253,28 @@ still require a bench check. Tests do not initiate physical motor movement.
   reconnecting and re-establish zero before another test.
 - Save failure: samples stay in memory; use Save results as to choose a
   writable location before closing or starting another test.
+
+
+## Calibraci?n del recorrido m?ximo
+
+Con las placas conectadas y el motor parado:
+
+1. Coloca el carro en el origen con los botones manuales y pulsa **Fijar cero**.
+   Si a?n no hay telemetr?a, realiza antes un movimiento corto y espera la parada.
+2. Mant?n **Avanzar** hasta el extremo de trabajo elegido, suelta y espera la
+   confirmaci?n de parada. Pulsa **Fijar m?ximo** para registrar el recorrido en mm.
+3. Vuelve con **Retroceder** hasta 0 mm (tolerancia de un pulso, 0,000625 mm).
+   Reduce la velocidad para aproximarte. No pulses Fijar cero otra vez: borrar?a
+   el m?ximo. Confirma despu?s la casilla de preparaci?n del ensayo.
+4. Los bloques no pueden superar el m?ximo registrado y el ensayo solo arranca
+   desde el cero calibrado. Al terminar se mantiene el m?ximo para otro ensayo.
+
+La posici?n se calcula con los pulsos enviados por el Mega (1600 pulsos/mm),
+no con un encoder. Avanzar corresponde al sentido positivo del protocolo c?clico.
+La calibraci?n se pierde al reconectar, al detectar un reinicio del Mega o una
+p?rdida de referencia. No se guarda entre sesiones. El modo demo simula tambi?n
+el posicionamiento y la calibraci?n.
+
+Este m?ximo valida los ensayos; **no detiene el movimiento manual en el l?mite**
+y no sustituye un final de carrera. El operador debe soltar el bot?n antes del
+extremo mec?nico. Requiere el firmware Mega_Cyclic_Telemetry con soporte JOG.
