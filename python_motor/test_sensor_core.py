@@ -5,6 +5,19 @@ from sensor_core import Acquisition, Frame, parse_frame, resistance
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_zero_voltage_keeps_sample_and_waits_for_finite_baseline(self):
+        data = Acquisition(3.3, 2400)
+        for n, voltage in enumerate((0, 0.01, 0, 1.65)):
+            data.add(Frame(n, n * 10000, voltage), n)
+        stream = io.StringIO()
+        data.write_csv(stream)
+        rows = list(csv.DictReader(io.StringIO(stream.getvalue())))
+        self.assertEqual(rows[0]['Voltage_V'], '0.000000')
+        self.assertEqual(rows[0]['Resistance_ohm'], '')
+        self.assertEqual(rows[1]['Relative_resistance_percent'], '0.000000')
+        self.assertEqual(rows[2]['Relative_resistance_percent'], '')
+        self.assertLess(float(rows[3]['Relative_resistance_percent']), 0)
+
     def test_csv_baseline_and_relative_resistance(self):
         data = Acquisition(3.3, 2400)
         # R=2400, 3600, 1200 ohm: relative changes 0%, +50%, -50%.
@@ -30,7 +43,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_divider(self):
         self.assertAlmostEqual(resistance(1.65, 3.3, 1500), 1500)
-        for voltage in [0, 0.01, 3.05, 3.3, float('nan')]:
+        for voltage in [-0.01, 3.05, 3.3, float('nan')]:
             with self.assertRaises(ValueError):
                 resistance(voltage, 3.3, 1500)
 

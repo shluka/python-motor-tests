@@ -64,7 +64,7 @@ def main():
                        voltage_max=max(f.voltage for f in frames),
                        voltage_mean=statistics.mean(f.voltage for f in frames),
                        voltage_stdev=statistics.stdev(f.voltage for f in frames),
-                       outside_gui_voltage_limits=sum(not 0.01 < f.voltage < 3.05 for f in frames))
+                       outside_gui_voltage_limits=sum(not 0 <= f.voltage < 3.05 for f in frames))
     stem.with_suffix('.json').write_text(json.dumps(summary, indent=2), encoding='utf-8')
     print(json.dumps(summary, indent=2))
     if not frames:

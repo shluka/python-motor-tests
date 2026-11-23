@@ -13,7 +13,7 @@ from serial.tools import list_ports
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from sensor_core import Acquisition, Frame, SENSORS, parse_frame
+from sensor_core import Acquisition, Frame, SENSORS, parse_frame, resistance_csv
 from motor_core import Block, MotorProtocol, LineBuffer, Mechanics, BENCH_LIMITS, JogController, TravelCalibration
 
 
@@ -550,10 +550,12 @@ class App:
             self.baseline_start = now
         r0 = self.data.initial_resistance
         r = row[4]
-        self.filtered = r if self.filtered is None else self.smoothing * r + (1-self.smoothing)*self.filtered
+        if math.isfinite(r):
+            self.filtered = r if self.filtered is None else self.smoothing * r + (1-self.smoothing)*self.filtered
+        plotted_resistance = self.filtered if math.isfinite(r) else math.nan
         self.rows.append((row[0], row[3], r, 100*(r-r0)/r0,
                           self.protocol.position(now), self.protocol.block, self.protocol.cycle,
-                          self.protocol.phase, row[1], row[2], now-self.started, self.filtered,
+                          self.protocol.phase, row[1], row[2], now-self.started, plotted_resistance,
                           self.protocol.revolutions(now), self.protocol.position_source,
                           self.protocol.motor_time_us))
         self.last_sensor = now
@@ -647,7 +649,10 @@ class App:
         self.ax.relim()
         self.ax.autoscale_view()
         r = rows[-1]
-        self.readings.set(f'R: {r[2]:.3f} ohm | R0: {r0:.3f} ohm | Relativa: {r[3]:.3f}%\n'
+        resistance = f'{r[2]:.3f} ohm' if math.isfinite(r[2]) else 'N/A'
+        baseline = f'{r0:.3f} ohm' if math.isfinite(r0) else 'N/A'
+        relative = f'{r[3]:.3f}%' if math.isfinite(r[3]) else 'N/A'
+        self.readings.set(f'Vout: {r[1]:.6f} V | R: {resistance} | R0: {baseline} | Relativa: {relative}\n'
                           f'Tiempo: {r[0]:.2f} s | Desplazamiento: {r[4]:.4f} mm\n'
                           f'Bloque {r[5]} | Ciclo {r[6]} | {r[7]}')
         self.status.set(f'{self.protocol.stage} · {len(self.rows)} samples · '
@@ -719,10 +724,10 @@ class App:
             with path.open('w', newline='', encoding='utf-8') as stream:
                 writer = csv.writer(stream)
                 writer.writerow(['Time_s', 'Resistance_ohm', 'Relative_resistance_percent',
-                                 'Displacement_mm'])
+                                 'Displacement_mm', 'Voltage_V'])
                 for row in self.rows:
-                    writer.writerow([f'{v:.6f}' if isinstance(v, float) else v
-                                     for v in (row[0], row[2], row[3], row[4])])
+                    writer.writerow([f'{row[0]:.6f}', resistance_csv(row[2]),
+                                     resistance_csv(row[3]), f'{row[4]:.6f}', f'{row[1]:.6f}'])
             self.saved = True
             self.status.set(f'{self.outcome} · saved {path.name}' + (f' · {self.error}' if self.error else ''))
         except OSError as exc:

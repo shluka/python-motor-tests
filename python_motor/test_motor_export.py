@@ -22,9 +22,10 @@ class ExportTests(unittest.TestCase):
         app.data = Acquisition(3.3, 4700)
         app.rows = []
         app.smoothing, app.filtered = 1, None
-        app.accept(Frame(0, 10000, 1.65), 1)
+        app.accept(Frame(0, 5000, 0), .995)
+        app.accept(Frame(1, 10000, 1.65), 1)
         app.protocol.message('M,20000,800', 1.01)
-        app.accept(Frame(1, 20000, 1.1), 1.01)
+        app.accept(Frame(2, 20000, 1.1), 1.01)
         app.metadata, app.error, app.outcome, app.status = {}, None, 'Completed', Status()
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'run.csv'
@@ -33,11 +34,14 @@ class ExportTests(unittest.TestCase):
             with path.open() as stream:
                 reader = csv.DictReader(stream)
                 self.assertEqual(reader.fieldnames, ['Time_s', 'Resistance_ohm',
-                    'Relative_resistance_percent', 'Displacement_mm'])
+                    'Relative_resistance_percent', 'Displacement_mm', 'Voltage_V'])
                 rows = list(reader)
-            self.assertAlmostEqual(float(rows[0]['Resistance_ohm']), 4700)
-            self.assertAlmostEqual(float(rows[1]['Relative_resistance_percent']), 100)
-            self.assertEqual(float(rows[1]['Displacement_mm']), .5)
+            self.assertEqual(rows[0]['Voltage_V'], '0.000000')
+            self.assertEqual(rows[0]['Resistance_ohm'], '')
+            self.assertEqual(rows[0]['Relative_resistance_percent'], '')
+            self.assertAlmostEqual(float(rows[1]['Resistance_ohm']), 4700)
+            self.assertAlmostEqual(float(rows[2]['Relative_resistance_percent']), 100)
+            self.assertEqual(float(rows[2]['Displacement_mm']), .5)
             self.assertEqual(list(Path(directory).iterdir()), [path])
 
     def test_filename_contains_frozen_protocol(self):

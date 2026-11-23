@@ -167,7 +167,8 @@ class App:
         row = self.data.add(frame, now - self.started)
         self.plot_rows.append(row)
         self.last_frame = now
-        self.reading.set(f'Vout: {row[3]:.6f} V\nResistance: {row[4]:.2f} Ω')
+        resistance_text = f'{row[4]:.2f} Ω' if math.isfinite(row[4]) else 'N/A'
+        self.reading.set(f'Vout: {row[3]:.6f} V\nResistance: {resistance_text}')
 
     def poll(self):
         now = time.monotonic()

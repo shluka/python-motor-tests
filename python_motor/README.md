@@ -102,9 +102,10 @@ to save. Choosing No or cancelling the file dialog creates no files. Samples
 remain in memory until a new run replaces them or the application closes.
 Save results as allows saving them later.
 
-Saving creates **one CSV with exactly four columns**: `Time_s`,
-`Resistance_ohm`, `Relative_resistance_percent`, and `Displacement_mm`.
-Relative resistance uses the first accepted resistance sample as R0.
+Saving creates **one CSV with five columns**: `Time_s`,
+`Resistance_ohm`, `Relative_resistance_percent`, `Displacement_mm`, and `Voltage_V`.
+Relative resistance uses the first calculable resistance as R0. At 0 V, the
+voltage is recorded and both resistance columns are empty.
 No metadata, diagnostics, or motor-event files are created.
 
 The suggested filename contains the run's protocol. For example,

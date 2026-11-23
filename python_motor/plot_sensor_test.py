@@ -8,7 +8,7 @@ from pathlib import Path
 def read_measurements(path, include_displacement=False):
     """Read original dot-decimal CSVs or semicolon/comma-decimal CSVs.
 
-    Relative resistance is recalculated from the first resistance sample.
+    Relative resistance is recalculated from the first finite resistance sample.
     Ambiguous grouped numbers are rejected rather than silently repaired.
     """
     times, resistances = [], []
@@ -38,12 +38,15 @@ def read_measurements(path, include_displacement=False):
                     if not math.isfinite(value):
                         raise ValueError('nonfinite value')
                     return value
-                t, r = numeric('Time_s'), numeric('Resistance_ohm')
+                t = numeric('Time_s')
+                voltage = numeric('Voltage_V') if 'Voltage_V' in row else None
+                r = (math.nan if voltage == 0 and row['Resistance_ohm'] == ''
+                     else numeric('Resistance_ohm'))
                 if t < 0 or r <= 0:
                     raise ValueError('negative time or nonpositive resistance')
                 if times and t <= times[-1]:
                     raise ValueError('time must increase')
-                if 'Voltage_V' in row and not 0 < numeric('Voltage_V') < 3.4:
+                if voltage is not None and not 0 <= voltage < 3.4:
                     raise ValueError('voltage outside ESP32 range')
                 if displacements is not None:
                     displacement = numeric('Displacement_mm')
@@ -57,7 +60,7 @@ def read_measurements(path, include_displacement=False):
                 displacements.append(displacement)
     if not times:
         raise ValueError('The selected CSV contains no measurements.')
-    r0 = resistances[0]
+    r0 = next((r for r in resistances if math.isfinite(r)), math.nan)
     relative = [100 * (r - r0) / r0 for r in resistances]
     if include_displacement:
         return times, resistances, relative, displacements
@@ -86,7 +89,7 @@ def make_figure(paths):
     for path, (times, resistances, relative, displacements) in zip(paths, measurements):
         label = path.name if sum(p.name == path.name for p in paths) == 1 else str(path)
         line, = axes[0].plot(times, resistances, linewidth=1,
-                             label=f'{label} (R0={resistances[0]:.3f} ohm)')
+                             label=f'{label} (R0={next((r for r in resistances if math.isfinite(r)), math.nan):.3f} ohm)')
         axes[1].plot(times, relative, color=line.get_color(), linewidth=1, label=label)
         if displacements is not None:
             axes[2].plot(displacements, relative, color=line.get_color(), linewidth=1, label=label)

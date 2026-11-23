@@ -38,9 +38,14 @@ def parse_frame(line):
 def resistance(voltage, supply, fixed):
     if not 0.1 <= supply <= 3.6 or fixed <= 0:
         raise ValueError('Invalid divider configuration.')
-    if not math.isfinite(voltage) or not 0.01 < voltage < min(3.05, supply):
+    if not math.isfinite(voltage) or not 0 <= voltage < min(3.05, supply):
         raise ValueError(f'Invalid Vout {voltage:.4f} V; check the divider wiring.')
-    return fixed * (supply / voltage - 1)
+    return fixed * (supply / voltage - 1) if voltage else math.nan
+
+
+def resistance_csv(value):
+    """Leave unavailable resistance measurements empty in the CSV."""
+    return f'{value:.6f}' if math.isfinite(value) else ''
 
 
 class Acquisition:
@@ -50,11 +55,12 @@ class Acquisition:
         self.dropped = self.invalid = 0
         self.last = None
         self.origin = None
+        self._initial_resistance = math.nan
 
     @property
     def initial_resistance(self):
-        """First accepted sample of this run, in ohms."""
-        return self.rows[0][4] if self.rows else None
+        """First finite resistance of this run, in ohms."""
+        return self._initial_resistance if self.rows else None
 
     def write_csv(self, stream):
         """Export the three measured vectors and derived resistance change."""
@@ -63,14 +69,16 @@ class Acquisition:
                          'Relative_resistance_percent'])
         r0 = self.initial_resistance
         for row in self.rows:
-            writer.writerow([f'{row[0]:.6f}', f'{row[3]:.6f}', f'{row[4]:.6f}',
-                             f'{(row[4] - r0) / r0 * 100:.6f}'])
+            writer.writerow([f'{row[0]:.6f}', f'{row[3]:.6f}', resistance_csv(row[4]),
+                             resistance_csv((row[4] - r0) / r0 * 100)])
 
     def add(self, frame, host_time):
         if self.last is not None:
             if frame.sequence <= self.last.sequence or frame.time_us <= self.last.time_us:
                 raise ValueError('ESP32 restarted or sequence/timestamp is not monotonic.')
         value = resistance(frame.voltage, self.supply, self.fixed)
+        if math.isnan(self._initial_resistance) and math.isfinite(value):
+            self._initial_resistance = value
         if self.last is not None:
             self.dropped += frame.sequence - self.last.sequence - 1
         if self.origin is None:
