@@ -16,6 +16,10 @@ python -m venv .venv
 
 Para usar las placas, ejecuta el mismo comando sin `--demo`. Consulta la [gu?a completa](python_motor/README.md) para cargar el firmware, configurar los puertos, preparar el ensayo y guardar o representar resultados.
 
+## Procesamiento de datos
+
+Consulta la [guía de procesamiento](data_processing/README.md) para abrir el repositorio desde PowerShell y generar las gráficas de velocidad y ensayos cíclicos.
+
 ## Pruebas autom?ticas
 
 ```powershell
